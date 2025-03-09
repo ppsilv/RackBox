@@ -1,0 +1,9 @@
+[package]
+name = "rpi4_fanp17_daemon"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rppal = "0.22.1"
+syslog = "7.0.0"
+nix = "0.23.0"
