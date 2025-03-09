@@ -58,7 +58,7 @@ fn main() {
     let gpio = Gpio::new().expect("Falha ao inicializar o GPIO");
     let mut fan_pin = gpio.get(GPIO_FAN_PIN).unwrap().into_output();
 
-    log_to_syslog("Serviço de controle do fan iniciado.");
+    log_to_syslog("Serviço de controle do fan iniciado for fan.");
 
     loop {
         let temp = get_cpu_temperature();
