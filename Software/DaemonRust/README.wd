@@ -1,0 +1,66 @@
+
+1. Logs no Syslog:
+   - O crate `syslog` é usado para enviar logs para o syslog do sistema.
+   - A função `setup_logger` configura o logger para usar o facility `LOG_DAEMON`, que é apropriado para daemons.
+   - As macros `info!`, `warn!`, e `error!` são usadas para registrar mensagens em diferentes níveis de severidade.
+
+2. Tratamento de Erros:
+   - Todos os erros são registrados no syslog usando a macro `error!`.
+   - Se ocorrer um erro crítico (por exemplo, falha ao inicializar o GPIO), o daemon é encerrado com `process::exit(1)`.
+
+3. Controle de Loop:
+   - O loop principal pisca o LED 8 vezes por segundo.
+   - O sinal `Ctrl+C` é capturado usando o crate `ctrlc`, e o daemon é encerrado graciosamente.
+
+4. Daemonização:
+   - O processo é transformado em um daemon usando a função `daemonize`, que faz o fork, cria uma nova sessão e redireciona a entrada/saída padrão para `/dev/null`.
+
+
+
+## Como Executar
+
+1. Compile o projeto:
+
+  
+   cargo build --release
+  
+
+2. Execute o daemon como root (o acesso ao GPIO requer privilégios de superusuário):
+
+   
+   sudo ./target/release/led_daemon
+   
+
+3. Verifique os logs no syslog:
+   Os logs serão registrados no syslog do sistema. Você pode visualizá-los usando o comando `journalctl` ou verificando o arquivo `/var/log/syslog`:
+
+   bash
+   sudo journalctl -f -t led_daemon
+  
+
+   Ou:
+
+  
+   tail -f /var/log/syslog | grep led_daemon
+  
+
+
+
+## Exemplo de Logs no Syslog
+
+Se tudo estiver funcionando corretamente, você verá logs como os seguintes no syslog:
+
+
+Oct 10 12:34:56 raspberrypi led_daemon[1234]: LED daemon started
+Oct 10 12:34:56 raspberrypi led_daemon[1234]: Received termination signal, stopping daemon
+Oct 10 12:34:56 raspberrypi led_daemon[1234]: LED daemon stopped
+
+
+
+
+## Considerações Finais
+
+Permissões:** Certifique-se de que o usuário que executa o daemon tenha permissão para acessar o GPIO.
+Inicialização Automática:** Para iniciar o daemon automaticamente na inicialização do sistema, crie um serviço systemd.
+Testes: Teste o código em um Raspberry Pi com um LED conectado ao pino GPIO 14.
+

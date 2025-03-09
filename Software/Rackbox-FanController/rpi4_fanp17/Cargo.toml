@@ -1,0 +1,8 @@
+[package]
+name = "rpi4_fanp17"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rppal = "0.14"
+syslog = "5.0.0"
