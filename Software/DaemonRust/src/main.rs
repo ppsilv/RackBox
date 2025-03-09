@@ -40,6 +40,9 @@ fn daemonize() {
         libc::dup2(null_fd, libc::STDOUT_FILENO);
         libc::dup2(null_fd, libc::STDERR_FILENO);
     }
+    //loop{
+    //    thread::sleep(Duration::from_secs(1)); // Mantém o processo em execução
+    //}
 }
 
 fn setup_logger() -> Result<(), syslog::Error> {
@@ -58,7 +61,7 @@ fn setup_logger() -> Result<(), syslog::Error> {
 
 fn main() {
     // Daemonize the process
-    daemonize();
+    //daemonize();
 
     // Set up syslog logging
     if let Err(e) = setup_logger() {
@@ -66,7 +69,7 @@ fn main() {
         process::exit(1);
     }
 
-    info!("LED daemon started");
+    info!("LED daemon started 003");
 
     // Initialize GPIO
     let gpio = match Gpio::new() {
@@ -95,6 +98,7 @@ fn main() {
         info!("Received termination signal, stopping daemon");
     }).expect("Error setting Ctrl+C handler");
 
+    daemonize();
     // Blink the LED 8 times per second
     while running.load(Ordering::SeqCst) {
         pin.set_high();
@@ -104,6 +108,10 @@ fn main() {
         thread::sleep(Duration::from_millis(62)); // 1/8 of a second
     }
 
+    loop{
+        thread::sleep(Duration::from_secs(1)); // Mantém o processo em execução
+    }
+   
     // Clean up
     pin.set_low();
 
