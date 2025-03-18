@@ -1,0 +1,40 @@
+
+Aplicação
+
+1 - Por 3 containeres,de preferencia container que possa ter nome, na tela cada um deles ocupando 1/3 da tela.
+    se for possível por uma cor de background cinza claro
+2 - O primeiro container deve ter o nome Temperatura.
+    2.1 - por um label com nome "Sensor Rack" e na frente dele um slider
+    2.2 - por um outro container de nome "Lab Teto" e cor de background azul claro
+        2.2.1 - por 3 labes um abaixo do outro e cada um com um slider em sua frente.
+                o primeiro tem nome Sensor 1 o segundo Sendor 2 e o terceiro Sensor 3.
+    2.3 - por um outro container de nome "Servidores" e cor de background azul claro.
+        2.3.1 - por 4 labels um debaixo do outro e cada um com um slider em sua frente e nomeando cada um como
+                segue, raspi001,raspi002, raspi003 e raspi004.
+
+3 - O segundo conainer deve ter o nome de "Tensões e Correntes" uma cor de background cinza claro
+    3.1 - por um cointainer de nome 5Volts e cor de background vermelho claro
+         por 2 labels um debaixo do outro com outro label na frente de cada
+         o primeiro label de nome "Tensão" e o segundo de nome "Corrente" os labels na frente deles
+         vão conter no futuro o valor de tenão e o valor de corrente, agora pode ser mocado um valor 5 em cada um
+
+    3.2 - por um cointainer de nome 12Volts e cor de background cor laranja claro
+         por 2 labels um debaixo do outro com outro label na frente de cada
+         o primeiro label de nome "Tensão" e o segundo de nome "Corrente" os labels na frente deles
+         vão conter no futuro o valor de tenão e o valor de corrente, agora pode ser mocado um valor 12 em cada um
+
+4 - O terceiro container de nome "Máquinas Online no RACK", uma cor de background cinza claro
+    4.1 por um container de nome "Grupo 1" de cor de background amarelo claro, por 5 labels um debaixo do outro e cada um com um checkbox em
+        sua frente, o nome nos labels são respectivamente:
+        "Modem Vivo"
+        "raspi001 DNS-DHCP"
+        "ER605 - Roteador"
+        "Switch Gerenciável"
+        "raspi004 Servidor 1"
+    4.2 por um container de nome "Grupo 2"  de cor de background verde claro, por 1 label de nome "orange01 Serv.Dados" com um checkbox em sua frente
+    4.3 por um container de nome "Grupo 3" de cor de background ciano, por 5 labels um debaixo do outro e cada um com um checkbox em
+        sua frente, o nome nos labels são respectivamente:
+        "Modem Tim"
+        "raspi002 Servidor 2"
+        "raspi003 Servidor 3"
+        "Switch Não Gerenciavel"

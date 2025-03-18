@@ -1,0 +1,70 @@
+Implementar uma aplicação com tela gráfica no framework Lazarus que utiliza a linguagem pascal
+
+1 - Container Temperatura
+     Externo ao Lab
+     Teto lab
+         sensor 1 Slider
+         sensor 2 Slider
+         sensor 3 Slider
+     Sensor dentro do Rackbox
+     Cpus
+         sensor raspi001 Slider
+         sensor raspi002 Slider
+         sensor raspi003 Slider
+         sensor raspi004 Slider
+
+
+2 - Container Voltimentros e Amperimetros
+    5 Volts Textbox Não editável
+    12 Volts TextBox Não editável
+
+    O item 3 é só para me lembrar esqueça-o por enquanto
+3 - Conatainer Tensão da Rede
+    Sensor tensão 110Volts da rede
+    Definir quais máquinas devem ser
+    desligadas logo que falta energia
+    elétrica para poupar bateria.
+    As outras máquinas terão uma política
+    diferente para o desligamento.
+
+4 -  Container Status das Maquinas
+    Grupo 1
+        modemVivo   - Acesso internet checkbox
+        raspi001    - DNS e DHCP      checkbox
+        ER605       - Roteador        checkbox
+        Switch Ger. - Switch          checkbox
+        raspi004    - Servidor 1 -
+        Controle temp e tensão.       checkbox
+    Grupo 2
+        OrangePi5   - Servidor dados  checkbox
+    Grupo 3
+        modemTim    - Acesso Internet  checkbox
+        raspi002    - Servidor 2       checkbox
+        raspi003    - Servidor 3       checkbox
+        Switch NGer - switch           checkbox
+
+5 - Container DHCP Lease
+   Listbox com Maquinas com lease no DHCP
+
+6 - Vamos implementar um socket TCP/IP que escuta em uma porta específica e recebe dados dos sensores, servidores e máquinas. Além disso, criaremos um pequeno protocolo para padronizar a comunicação entre o software e os dispositivos.
+Estrutura do Protocolo
+
+Vamos definir um protocolo simples para enviar e receber dados. Um exemplo de formato pode ser:
+
+<ID_DISPOSITIVO>:<TIPO_DE_DADO>:<VALOR>
+
+    ID_DISPOSITIVO: Identificador único do dispositivo (ex: "SENSOR_TEMP_1", "SERVER_1").
+
+    TIPO_DE_DADO: Tipo de dado sendo enviado (ex: "TEMP" para temperatura, "VOLT" para tensão, "STATUS" para status da máquina).
+
+    VALOR: Valor do dado (ex: "23.5" para temperatura, "12.0" para tensão, "ONLINE" para status).
+
+Exemplo de mensagem:
+
+
+SENSOR_TEMP_1:TEMP:23.5
+SERVER_1:VOLT:12.0
+MACHINE_1:STATUS:ONLINE
+
+
+
