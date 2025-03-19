@@ -18,6 +18,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, Duration};
+use sysinfo::{System, SystemExt};
+use sysinfo::NetworkExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Client {
@@ -38,6 +40,14 @@ struct HealthResponse {
 struct AppState {
     clients: Arc<Mutex<HashMap<u32, Client>>>,
     start_time: SystemTime,
+}
+
+// Adicione esta estrutura junto com as outras
+#[derive(Default)]
+pub struct NetworkData {
+    bytes_sent: u64,
+    bytes_recv: u64,
+    interfaces: Vec<(String, String)>,
 }
 
 async fn receive_command(
@@ -128,216 +138,229 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
+
+
 async fn dashboard(state: web::Data<AppState>) -> impl Responder {
     let clients = state.clients.lock().unwrap();
     
-    let active_count = clients.values().filter(|c| c.status.eq_ignore_ascii_case("active")).count();
-    let inactive_count = clients.values().filter(|c| c.status.eq_ignore_ascii_case("inactive")).count();
+    // Dados simulados de rede
+ //   let network_data = NetworkData {
+ //       bytes_sent: 14_567_890,
+ //       bytes_recv: 23_456_789,
+ //       interfaces: vec![
+ //           ("eth0".to_string(), "UP".to_string()),
+ //           ("wlan0".to_string(), "DOWN".to_string()),
+ //       ],
+ //   };
+    // Coleta de dados de rede REAL
+// Modifique a seção de rede para:
+let network_data = {
+    let mut sys = System::new();
 
-    let mut html = String::from(r#"
+    sys.refresh_all();  // Atualiza todos os dados do sistema
+    
+    let mut data = NetworkData::default();
+    
+    // Para cada interface de rede
+    for (interface_name, network_data) in sys.networks() {
+        data.bytes_sent += network_data.total_transmitted();
+        data.bytes_recv += network_data.received();
+        data.interfaces.push((
+            interface_name.to_string(),
+            if network_data.received() > 0 || network_data.total_transmitted() > 0 {
+                "UP".to_string()
+            } else {
+                "DOWN".to_string()
+            },
+        ));
+    }
+    
+    data
+};
+
+
+    let mut sys = System::new_all();
+    sys.refresh_networks();
+
+    let mut network_data = NetworkData::default();
+    for (interface_name, network) in sys.networks() {
+        network_data.bytes_sent += network.total_transmitted();
+        network_data.bytes_recv += network.total_received();
+        network_data.interfaces.push((
+            interface_name.clone(),
+            if network.total_received() > 0 || network.total_transmitted() > 0 {
+                "UP".to_string()
+            } else {
+                "DOWN".to_string()
+            },
+        ));
+    }
+
+    let html = format!(r#"
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="UTF-8">
-        <title>CasaOS Client Dashboard</title>
+        <title>CasaOS Dashboard</title>
         <style>
-            :root {
+            :root {{
                 --primary-color: #2A3950;
                 --header-bg: #2A3950;
                 --accent-color: #00C2FF;
                 --success-color: #00D1A9;
                 --danger-color: #FF4757;
                 --text-light: #FFFFFF;
-            }
+            }}
 
-            body {
+            body {{
                 background: #f5f6fa;
                 margin: 0;
                 font-family: 'Segoe UI', system-ui, sans-serif;
-            }
+            }}
 
-            .container {
+            .container {{
                 display: grid;
-                grid-template-columns: 450px 250px;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
                 gap: 20px;
-                max-width: 750px;
+                max-width: 1400px;
                 margin: 20px auto;
                 padding: 0 20px;
-            }
+            }}
 
-            .panel {
+            .panel {{
                 background: white;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            }
+                border-radius: 12px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+                padding: 20px;
+                min-height: 300px;
+            }}
 
-            .clients-box {
-                max-height: 80vh;
+            .clients-box {{
+                max-height: 70vh;
                 overflow-y: auto;
                 padding: 15px;
-            }
+            }}
 
-            .client-list {
+            .client-list {{
                 display: grid;
                 gap: 8px;
-            }
+            }}
 
-            .client-item-header {
+            .client-item-header {{
                 display: grid;
-                grid-template-columns: 60px 1fr 80px;
+                grid-template-columns: 80px 1fr 100px;
                 align-items: center;
-                gap: 8px;
+                gap: 15px;
                 padding: 12px 15px;
                 background: var(--header-bg);
                 color: var(--text-light);
                 border-radius: 6px;
-                font-size: 0.9em;
-            }
+                position: sticky;
+                top: 0;
+                z-index: 1;
+            }}
 
-            .client-item {
+            .client-item {{
                 display: grid;
-                grid-template-columns: 60px 1fr 80px;
+                grid-template-columns: 80px 1fr 100px;
                 align-items: center;
-                gap: 8px;
+                gap: 15px;
                 padding: 12px 15px;
                 background: #f8f9ff;
                 border-radius: 6px;
                 transition: all 0.2s ease;
                 cursor: pointer;
-                position: relative;
-            }
+            }}
 
-            .client-item::before {
-                content: "";
-                position: absolute;
-                left: 0;
-                top: 2px;
-                bottom: 2px;
-                width: 3px;
-                border-radius: 2px;
-            }
-
-            .client-item:hover {
+            .client-item:hover {{
                 transform: translateY(-2px);
                 box-shadow: 0 3px 6px rgba(0,0,0,0.08);
                 background: white;
-            }
+            }}
 
-            .ip-status-group {
+            .ip-status-group {{
                 display: flex;
                 align-items: center;
                 gap: 10px;
-                margin-left: 8px;
-            }
+            }}
 
-            .ip-cell {
+            .ip-cell {{
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
-                max-width: 180px;
-                font-size: 0.95em;
-            }
+            }}
 
-            .status-cell {
-                flex-shrink: 0;
-                padding: 3px 8px;
+            .status-cell {{
+                padding: 4px 8px;
                 border-radius: 12px;
                 font-weight: 500;
-                font-size: 0.85em;
-                width: 70px;
+                font-size: 0.9em;
+                width: 80px;
                 text-align: center;
-            }
+            }}
 
-            .status-active { 
-                background: rgba(0, 209, 169, 0.15);
-                color: var(--success-color);
-            }
-            .status-inactive { 
-                background: rgba(255, 71, 87, 0.15);
-                color: var(--danger-color);
-            }
-            .status-pending { 
-                background: rgba(0, 194, 255, 0.15);
-                color: var(--accent-color);
-            }
+            .status-active {{ background: rgba(0, 209, 169, 0.15); color: var(--success-color); }}
+            .status-inactive {{ background: rgba(255, 71, 87, 0.15); color: var(--danger-color); }}
 
-            .analytics-box {
+            .analytics-box {{
                 padding: 20px;
                 background: var(--header-bg);
                 color: var(--text-light);
                 border-radius: 8px;
-                height: fit-content;
-            }
+            }}
 
-            .analytics-box h2 {
-                margin: 0 0 15px 0;
-                font-size: 1.2em;
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }
+            .network-panel {{
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+            }}
 
-            .stat-item {
-                margin: 10px 0;
+            .interface-item {{
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                font-size: 0.95em;
-            }
+                padding: 8px;
+                background: white;
+                border-radius: 6px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            }}
 
-            .stat-value {
-                font-weight: 500;
-            }
+            .interface-status {{
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                margin-left: 10px;
+            }}
+
+            .status-up {{ background: var(--success-color); }}
+            .status-down {{ background: var(--danger-color); }}
         </style>
     </head>
     <body>
         <div class="container">
+            <!-- Painel de Máquinas -->
             <div class="panel">
                 <div class="clients-box">
                     <div class="client-list">
                         <div class="client-item-header">
                             <div>ID</div>
                             <div class="ip-status-group">
-                                <span>IP + Status</span>
+                                <span>IP Address</span>
+                                <span>Status</span>
                             </div>
                             <div>Port</div>
-                        </div>"#);
-
-    // Adiciona os clientes
-    for client in clients.values() {
-        let status_class = match client.status.to_lowercase().as_str() {
-            "active" => "status-active",
-            "inactive" => "status-inactive",
-            _ => "status-pending"
-        };
-
-        html.push_str(&format!(
-            r#"<div class="client-item">
-                <div>#{}</div>
-                <div class="ip-status-group">
-                    <div class="ip-cell">{}</div>
-                    <div class="status-cell {}">{}</div>
-                </div>
-                <div>{}</div>
-            </div>"#,
-            client.id,
-            client.ip,
-            status_class,
-            client.status,
-            client.port
-        ));
-    }
-
-    // Fecha a seção de clientes e adiciona analytics
-    html.push_str(&format!(
-        r#"</div>
+                        </div>
+                        {}
+                    </div>
                 </div>
             </div>
+
+            <!-- Painel de Analytics -->
             <div class="panel">
                 <div class="analytics-box">
                     <h2>📊 Analytics</h2>
                     <div class="stat-item">
-                        <span>Total:</span>
+                        <span>Total Machines:</span>
                         <span class="stat-value">{}</span>
                     </div>
                     <div class="stat-item">
@@ -350,13 +373,95 @@ async fn dashboard(state: web::Data<AppState>) -> impl Responder {
                     </div>
                 </div>
             </div>
+
+            <!-- Painel de Rede -->
+            <div class="panel network-panel">
+                <div class="network-metric">
+                    <h3>🌐 Network Traffic</h3>
+                    <div class="network-stats">
+                        <div class="stat-item">
+                            <span>Sent:</span>
+                            <span class="stat-value">{}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>Received:</span>
+                            <span class="stat-value">{}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="network-metric">
+                    <h3>🔌 Interfaces</h3>
+                    <div class="interface-list">
+                        {}
+                    </div>
+                </div>
+            </div>
         </div>
     </body>
-    </html>"#,
-        clients.len(),
-        active_count,
-        inactive_count
-    ));
+    </html>
+    "#,
+    clients_html(&clients),
+    clients.len(),
+    clients.values().filter(|c| c.status.eq_ignore_ascii_case("active")).count(),
+    clients.values().filter(|c| c.status.eq_ignore_ascii_case("inactive")).count(),
+    format_bytes(network_data.bytes_sent),
+    format_bytes(network_data.bytes_recv),
+    interfaces_html(network_data.interfaces)
+    );
 
     HttpResponse::Ok().content_type("text/html").body(html)
+}
+
+
+
+fn clients_html(clients: &HashMap<u32, Client>) -> String {
+    clients.values().map(|client| {
+        let status_class = match client.status.to_lowercase().as_str() {
+            "active" => "status-active",
+            "inactive" => "status-inactive",
+            _ => "status-pending"
+        };
+        
+        format!(r#"
+            <div class="client-item">
+                <div>#{}</div>
+                <div class="ip-status-group">
+                    <div class="ip-cell">{}</div>
+                    <div class="status-cell {}">{}</div>
+                </div>
+                <div>{}</div>
+            </div>"#,
+            client.id,
+            client.ip,
+            status_class,
+            client.status,
+            client.port
+        )
+    }).collect()
+}
+
+fn format_bytes(bytes: u64) -> String {
+    if bytes >= 1_000_000 {
+        format!("{:.2} MB", bytes as f64 / 1_000_000.0)
+    } else {
+        format!("{:.2} KB", bytes as f64 / 1_000.0)
+    }
+}
+
+fn interfaces_html(interfaces: Vec<(String, String)>) -> String {
+    interfaces.iter().map(|(name, status)| {
+        format!(r#"
+            <div class="interface-item">
+                <span>{}</span>
+                <div style="display: flex; align-items: center;">
+                    <span class="data-unit">{}</span>
+                    <div class="interface-status {}"></div>
+                </div>
+            </div>"#,
+            name,
+            status,
+            if status == "UP" { "status-up" } else { "status-down" }
+        )
+    }).collect()
 }
