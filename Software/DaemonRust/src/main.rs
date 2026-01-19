@@ -102,10 +102,23 @@ fn main() {
     // Blink the LED 8 times per second
     while running.load(Ordering::SeqCst) {
         pin.set_high();
-        thread::sleep(Duration::from_millis(62)); // 1/8 of a second
-
+        thread::sleep(Duration::from_millis(240)); // 1/8 of a second
         pin.set_low();
-        thread::sleep(Duration::from_millis(62)); // 1/8 of a second
+        thread::sleep(Duration::from_millis(240)); // 1/8 of a second
+        pin.set_high();
+        thread::sleep(Duration::from_millis(240)); // 1/8 of a second
+        pin.set_low();
+        thread::sleep(Duration::from_millis(240)); // 1/8 of a second
+        pin.set_high();
+        thread::sleep(Duration::from_millis(240)); // 1/8 of a second
+        pin.set_low();
+        thread::sleep(Duration::from_millis(240)); // 1/8 of a second
+        pin.set_high();
+        thread::sleep(Duration::from_millis(240)); // 1/8 of a second
+        pin.set_low();
+        thread::sleep(Duration::from_millis(240)); // 1/8 of a second
+        pin.set_high();
+        thread::sleep(Duration::from_millis(2400)); // 1/8 of a second
     }
 
     loop{
