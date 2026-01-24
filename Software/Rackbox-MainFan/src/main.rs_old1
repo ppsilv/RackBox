@@ -1,0 +1,293 @@
+use anyhow::{Context, Result};
+use glob::glob;
+use log::{debug, error, info, warn, Record, LevelFilter};
+use rppal::gpio::{Gpio, OutputPin};
+use serde::Deserialize;
+use std::fs;
+use std::io::Read;
+use std::thread;
+use std::time::Duration;
+use syslog::{BasicLogger, Facility, Formatter3164};
+use ctrlc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+#[derive(Debug, Deserialize, Clone)]
+struct Config {
+    temp_minima: f32,
+    temp_maxima: f32,
+    fan_gpio: u8,
+    sensor_path: Option<String>,
+    check_interval_secs: Option<u64>,
+}
+
+impl Config {
+    fn load(path: &str) -> Result<Self> {
+        let config_content = fs::read_to_string(path)
+            .with_context(|| format!("Failed to read config file: {}", path))?;
+
+        let config: Config = toml::from_str(&config_content)
+            .with_context(|| "Failed to parse config file")?;
+
+        Ok(config)
+    }
+
+    fn default() -> Self {
+        Config {
+            temp_minima: 25.0,
+            temp_maxima: 35.0,
+            fan_gpio: 17,
+            sensor_path: None,
+            check_interval_secs: Some(5),
+        }
+    }
+}
+
+struct TemperatureSensor {
+    device_file: String,
+}
+
+impl TemperatureSensor {
+    fn new(device_file: Option<&str>) -> Result<Self> {
+        let device_file = match device_file {
+            Some(path) => path.to_string(),
+            None => Self::find_sensor()?,
+        };
+
+        info!("Sensor initialized at: {}", device_file);
+        Ok(TemperatureSensor { device_file })
+    }
+
+    fn find_sensor() -> Result<String> {
+        let pattern = "/sys/bus/w1/devices/28*/w1_slave";
+
+        for entry in glob(pattern)? {
+            match entry {
+                Ok(path) => {
+                    if path.exists() {
+                        let path_str = path.to_string_lossy().into_owned();
+                        info!("Found DS18B20 at: {}", path_str);
+                        return Ok(path_str);
+                    }
+                }
+                Err(e) => warn!("Error reading sensor path: {}", e),
+            }
+        }
+
+        Err(anyhow::anyhow!("No DS18B20 sensor found"))
+    }
+
+    fn read_temperature(&self) -> Result<f32> {
+        let mut file = fs::File::open(&self.device_file)
+            .with_context(|| format!("Failed to open sensor: {}", self.device_file))?;
+
+        let mut content = String::new();
+        file.read_to_string(&mut content)
+            .context("Failed to read sensor data")?;
+
+        let lines: Vec<&str> = content.lines().collect();
+
+        if lines.len() < 2 {
+            error!("Invalid sensor data format");
+            return Err(anyhow::anyhow!("Invalid sensor data format"));
+        }
+
+        if !lines[0].trim().ends_with("YES") {
+            error!("Sensor CRC check failed");
+            return Err(anyhow::anyhow!("Sensor CRC check failed"));
+        }
+
+        if let Some(temp_line) = lines.get(1) {
+            if let Some(pos) = temp_line.find("t=") {
+                let temp_str = &temp_line[pos + 2..];
+                let temp_millic = temp_str.parse::<f32>()
+                    .context("Failed to parse temperature")?;
+
+                let temp_c = temp_millic / 1000.0;
+                debug!("Raw temp: {} -> {}°C", temp_millic, temp_c);
+                return Ok(temp_c);
+            }
+        }
+
+        error!("Temperature data not found");
+        Err(anyhow::anyhow!("Temperature data not found"))
+    }
+}
+
+struct FanController {
+    pin: OutputPin,
+    current_state: bool,
+}
+
+impl FanController {
+    fn new(gpio_num: u8) -> Result<Self> {
+        let gpio = Gpio::new()?;
+        let mut pin = gpio.get(gpio_num)?.into_output();
+        pin.set_low();
+
+        info!("Fan controller on GPIO {}", gpio_num);
+        Ok(FanController {
+            pin,
+            current_state: false,
+        })
+    }
+
+    fn turn_on(&mut self) {
+        if !self.current_state {
+            self.pin.set_high();
+            self.current_state = true;
+            info!("Fan turned ON (GPIO {})", self.pin.pin());
+        }
+    }
+
+    fn turn_off(&mut self) {
+        if self.current_state {
+            self.pin.set_low();
+            self.current_state = false;
+            info!("Fan turned OFF (GPIO {})", self.pin.pin());
+        }
+    }
+}
+
+#[derive(PartialEq)]
+enum FanAction {
+    Off,
+    On,
+    NoChange,
+}
+
+struct Daemon {
+    config: Config,
+    sensor: TemperatureSensor,
+    fan: FanController,
+    last_action: FanAction,
+    running: Arc<AtomicBool>,
+}
+
+impl Daemon {
+    fn new(config: Config) -> Result<Self> {
+        // Setup syslog - usando BasicLogger que implementa Log trait
+        let formatter = Formatter3164 {
+            facility: Facility::LOG_DAEMON,
+            hostname: None,
+            process: "rackfan_daemon".into(),
+            pid: std::process::id(),
+        };
+
+        let logger = syslog::unix(formatter)?;
+        let logger = BasicLogger::new(logger);
+        
+        log::set_boxed_logger(Box::new(logger))
+            .map(|()| log::set_max_level(LevelFilter::Info))?;
+
+        info!("=== RackFan Daemon Starting ===");
+        info!("Min: {}°C, Max: {}°C, GPIO: {}", 
+              config.temp_minima, config.temp_maxima, config.fan_gpio);
+
+        let sensor = TemperatureSensor::new(config.sensor_path.as_deref())?;
+        let fan = FanController::new(config.fan_gpio)?;
+
+        Ok(Daemon {
+            config,
+            sensor,
+            fan,
+            last_action: FanAction::NoChange,
+            running: Arc::new(AtomicBool::new(true)),
+        })
+    }
+
+    fn setup_signal_handler(&self) {
+        let running = Arc::clone(&self.running);
+        let mut fan = self.fan;
+        
+        ctrlc::set_handler(move || {
+            info!("Shutting down...");
+            fan.turn_off();
+            running.store(false, Ordering::SeqCst);
+        }).expect("Error setting Ctrl-C handler");
+    }
+
+    fn run(mut self) -> Result<()> {
+        self.setup_signal_handler();
+        
+        info!("Monitoring every {} seconds", 
+              self.config.check_interval_secs.unwrap_or(5));
+
+        while self.running.load(Ordering::SeqCst) {
+            self.check_temperature()?;
+            
+            let interval = self.config.check_interval_secs.unwrap_or(5);
+            for _ in 0..interval {
+                if !self.running.load(Ordering::SeqCst) {
+                    break;
+                }
+                thread::sleep(Duration::from_secs(1));
+            }
+        }
+
+        info!("Daemon stopped");
+        Ok(())
+    }
+
+    fn check_temperature(&mut self) -> Result<()> {
+        match self.sensor.read_temperature() {
+            Ok(temp) => {
+                let action = if temp < self.config.temp_minima {
+                    FanAction::Off
+                } else if temp > self.config.temp_maxima {
+                    FanAction::On
+                } else {
+                    FanAction::NoChange
+                };
+
+                self.apply_action(action, temp);
+            }
+            Err(e) => {
+                error!("Temperature read error: {}", e);
+                self.fan.turn_on();
+                self.last_action = FanAction::On;
+            }
+        }
+        Ok(())
+    }
+
+    fn apply_action(&mut self, action: FanAction, temp: f32) {
+        if action != self.last_action {
+            match action {
+                FanAction::Off => {
+                    self.fan.turn_off();
+                    info!("Rackbox fan desligado (Temp: {:.1}°C < {:.1}°C)",
+                          temp, self.config.temp_minima);
+                }
+                FanAction::On => {
+                    self.fan.turn_on();
+                    info!("Rackbox fan ligado (Temp: {:.1}°C > {:.1}°C)",
+                          temp, self.config.temp_maxima);
+                }
+                FanAction::NoChange => {
+                    debug!("Temp {:.1}°C within range", temp);
+                }
+            }
+            self.last_action = action;
+        }
+    }
+}
+
+fn main() -> Result<()> {
+    let config_path = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "/etc/rackfan/config.toml".to_string());
+
+    let config = match Config::load(&config_path) {
+        Ok(config) => {
+            println!("Config loaded from: {}", config_path);
+            config
+        }
+        Err(e) => {
+            eprintln!("Config error: {}. Using defaults.", e);
+            Config::default()
+        }
+    };
+
+    Daemon::new(config)?.run()
+}

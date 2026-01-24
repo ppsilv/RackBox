@@ -106,18 +106,6 @@ fn main() {
         pin.set_low();
         thread::sleep(Duration::from_millis(240)); // 1/8 of a second
         pin.set_high();
-        thread::sleep(Duration::from_millis(240)); // 1/8 of a second
-        pin.set_low();
-        thread::sleep(Duration::from_millis(240)); // 1/8 of a second
-        pin.set_high();
-        thread::sleep(Duration::from_millis(240)); // 1/8 of a second
-        pin.set_low();
-        thread::sleep(Duration::from_millis(240)); // 1/8 of a second
-        pin.set_high();
-        thread::sleep(Duration::from_millis(240)); // 1/8 of a second
-        pin.set_low();
-        thread::sleep(Duration::from_millis(240)); // 1/8 of a second
-        pin.set_high();
         thread::sleep(Duration::from_millis(2400)); // 1/8 of a second
     }
 

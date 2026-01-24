@@ -1,0 +1,41 @@
+[Unit]
+Description=Rack Temperature Fan Controller
+After=network.target multi-user.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+# AJUSTE ESTE CAMINHO para onde seu binário realmente está
+ExecStart=/usr/local/bin/rackfan_daemon
+# ou
+# ExecStart=/home/pdsilva/projects/RackBox/Software/Rackbox-MainFan/target/release/rackfan_daemon
+
+# Diretório de trabalho (opcional mas recomendado)
+WorkingDirectory=/usr/local/bin
+# ou
+# WorkingDirectory=/home/pdsilva/projects/RackBox/Software/Rackbox-MainFan
+
+# Configurar PATH e ambiente
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="RUST_LOG=info"
+
+# Comportamento de reinício
+Restart=always
+RestartSec=10
+
+# Logs
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=rackfan_daemon
+
+# Segurança (mantenha o necessário)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/sys/bus/w1/devices/
+
+[Install]
+WantedBy=multi-user.target

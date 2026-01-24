@@ -1,0 +1,4 @@
+temp_minima = 25.0
+temp_maxima = 30.0
+fan_gpio = 27
+check_interval_secs = 5
